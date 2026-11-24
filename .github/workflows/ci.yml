@@ -1,1 +1,122 @@
+name: CI
 
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Préparer la base de données
+        run: bash db/setup.sh
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Installer les dépendances
+        working-directory: python-app
+        run: pip install -r requirements.txt
+
+      - name: Lancer les tests
+        working-directory: python-app
+        run: python -m pytest -v
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Préparer la base de données
+        run: bash db/setup.sh
+
+      - name: Installer Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer les dépendances
+        working-directory: node-app
+        run: npm install
+
+      - name: Lancer les tests
+        working-directory: node-app
+        run: npm test
+
+  java:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Préparer la base de données
+        run: bash db/setup.sh
+
+      - name: Installer Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Compiler et tester avec Maven
+        working-directory: java-app
+        run: mvn -B package
+
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Préparer la base de données
+        run: bash db/setup.sh
+
+      - name: Installer PHP 8.3 et extensions
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo, pdo_pgsql
+
+      - name: Installer les dépendances Composer et tester
+        working-directory: php-app
+        run: |
+          composer install --no-interaction
+          vendor/bin/phpunit StudentsTest.php
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [python, node, java, php]
+
+    steps:
+      - name: Build terminé
+        run: echo "Tous les tests ont réussi. Build terminé !"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Déploiement
+        run: echo "Déploiement en cours"
+
+      - name: Vérifier le secret
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "Token présent"
+          else
+            echo "Attention : Aucun DEPLOY_TOKEN configuré, mais on continue."
+          fi
